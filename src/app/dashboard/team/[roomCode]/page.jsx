@@ -328,15 +328,15 @@ export default function RoomPage() {
                 ))}
                 <div ref={chatEndRef} />
               </div>
-              <form onSubmit={sendChat} className="flex gap-2">
+              <form onSubmit={sendChat} className="flex items-center gap-0 rounded-xl border border-border bg-background focus-within:ring-2 focus-within:ring-ring focus-within:border-primary/50 transition-all duration-200">
                 <input
                   name="chatInput"
                   type="text"
                   placeholder="Type a message..."
-                  className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground text-foreground"
+                  className="flex-1 bg-transparent px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground text-foreground min-w-0"
                   autoComplete="off"
                 />
-                <Button type="submit" size="sm" variant="outline">
+                <Button type="submit" size="sm" className="m-1 rounded-lg h-8 w-8 p-0 shrink-0">
                   <Send className="h-3.5 w-3.5" />
                 </Button>
               </form>
