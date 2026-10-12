@@ -219,27 +219,6 @@ export async function getRoomStatus(roomCode, userId) {
       await room.save();
     }
 
-    // Early advance: if all participants answered this question, move to next immediately
-    if (room.status === "active" && room.currentQuestionIndex >= 0) {
-      const attempts = await RoomAttempt.find({ roomCode });
-      const allAnswered = room.participants.every(p => {
-        const attempt = attempts.find(a => a.userId === p.userId);
-        return attempt?.answers?.some(a => a.questionIndex === room.currentQuestionIndex);
-      });
-
-      if (allAnswered) {
-        const nextIndex = room.currentQuestionIndex + 1;
-        if (nextIndex >= room.questions.length) {
-          room.status = "completed";
-          room.questionStartedAt = null;
-        } else {
-          room.currentQuestionIndex = nextIndex;
-          room.questionStartedAt = new Date();
-        }
-        await room.save();
-      }
-    }
-
     // Prepare participants data (plain objects)
     const participants = room.participants.map(p => ({
       userId: p.userId,
