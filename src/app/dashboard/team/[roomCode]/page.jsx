@@ -138,18 +138,20 @@ export default function RoomPage() {
 
   useEffect(() => {
     syncRoom();
-    const interval = setInterval(syncRoom, 3000);
+    // Faster polling during active quiz for snappy question transitions
+    const ms = phase === "quiz" || phase === "countdown" ? 1500 : 3000;
+    const interval = setInterval(syncRoom, ms);
     return () => clearInterval(interval);
-  }, [syncRoom]);
+  }, [syncRoom, phase]);
 
   const fetchLeaderboard = async () => {
     const res = await getLeaderboard(roomCode);
     if (res.success) setLeaderboard(res.leaderboard);
   };
 
-  // Local Timer Countdown
+  // Local Timer Countdown — never stops on submit so it feels like a real game timer
   useEffect(() => {
-    if ((phase !== "quiz" && phase !== "countdown") || submitted) return;
+    if (phase !== "quiz" && phase !== "countdown") return;
 
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
@@ -162,7 +164,7 @@ export default function RoomPage() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [phase, questionIndex, submitted]);
+  }, [phase, questionIndex]);
 
   // Auto-submit on timeout
   useEffect(() => {
@@ -206,6 +208,8 @@ export default function RoomPage() {
         correctAnswer: currentQuestion.correctAnswer,
         explanation: currentQuestion.explanation
       });
+      // Immediately sync to detect if all players answered → next question loads faster
+      setTimeout(() => syncRoom(), 500);
     }
   };
 
@@ -374,21 +378,59 @@ export default function RoomPage() {
     if (!currentQuestion) return <div className="text-center py-20"><Loader2 className="animate-spin inline mr-2"/>Loading question...</div>;
 
     const timerPercent = (timeLeft / timerPerQuestion) * 100;
-    const timerColor = timeLeft <= 5 ? "text-red-500" : timeLeft <= 10 ? "text-yellow-500" : "text-primary";
+    const timerColor = timeLeft <= 5 ? "text-red-500" : timeLeft <= 10 ? "text-yellow-500" : "text-emerald-400";
+    const ringColor = timeLeft <= 5 ? "stroke-red-500" : timeLeft <= 10 ? "stroke-yellow-500" : "stroke-emerald-400";
+    const glowColor = timeLeft <= 5 ? "drop-shadow-[0_0_8px_rgba(239,68,68,0.6)]" : timeLeft <= 10 ? "drop-shadow-[0_0_8px_rgba(234,179,8,0.4)]" : "";
+    const radius = 28;
+    const circumference = 2 * Math.PI * radius;
+    const strokeOffset = circumference - (timerPercent / 100) * circumference;
 
     return (
       <div className="max-w-2xl mx-auto space-y-6">
-        <div className="space-y-2">
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground font-medium">
               Question {questionIndex + 1} of {session?.numQuestions}
             </span>
-            <div className={`flex items-center gap-1.5 font-mono font-bold text-lg ${timerColor}`}>
-              <Timer className="h-5 w-5" />
-              {timeLeft}s
+            <div className="flex items-center gap-3">
+              {/* Circular game-style timer */}
+              <div className={`relative flex items-center justify-center ${timeLeft <= 5 && timeLeft > 0 ? "animate-pulse" : ""}`}>
+                <svg width="68" height="68" className={`-rotate-90 ${glowColor}`}>
+                  {/* Background track */}
+                  <circle
+                    cx="34" cy="34" r={radius}
+                    fill="none"
+                    stroke="currentColor"
+                    className="text-muted/20"
+                    strokeWidth="5"
+                  />
+                  {/* Animated ring */}
+                  <circle
+                    cx="34" cy="34" r={radius}
+                    fill="none"
+                    className={ringColor}
+                    strokeWidth="5"
+                    strokeLinecap="round"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={strokeOffset}
+                    style={{ transition: "stroke-dashoffset 1s linear, stroke 0.5s ease" }}
+                  />
+                </svg>
+                <span className={`absolute font-mono font-black text-lg ${timerColor} tabular-nums`}>
+                  {timeLeft}
+                </span>
+              </div>
             </div>
           </div>
-          <Progress value={timerPercent} className="h-2" />
+          {/* Thin progress bar underneath */}
+          <div className="relative h-1.5 w-full rounded-full bg-muted/20 overflow-hidden">
+            <div
+              className={`absolute inset-y-0 left-0 rounded-full transition-all duration-1000 linear ${
+                timeLeft <= 5 ? "bg-red-500" : timeLeft <= 10 ? "bg-yellow-500" : "bg-emerald-400"
+              }`}
+              style={{ width: `${timerPercent}%` }}
+            />
+          </div>
         </div>
 
         <Card className="border-t-4 border-t-primary">
@@ -442,11 +484,24 @@ export default function RoomPage() {
                 <div className="flex items-center gap-2">
                   {answerResult.isCorrect ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-red-500" />}
                   <p className="font-bold">{answerResult.isCorrect ? "Correct!" : "Incorrect"}</p>
+                  {answerResult.points > 0 && (
+                    <Badge className="ml-auto bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-bold">+{answerResult.points} pts</Badge>
+                  )}
                 </div>
                 {!answerResult.isCorrect && answerResult.correctAnswer && (
                   <p className="text-sm text-foreground">Correct: <span className="font-bold">{answerResult.correctAnswer}</span></p>
                 )}
                 {answerResult.explanation && <p className="text-sm text-muted-foreground font-medium">{answerResult.explanation}</p>}
+              </div>
+            )}
+
+            {/* Waiting for others indicator */}
+            {submitted && (
+              <div className="flex items-center justify-center gap-2 rounded-lg border border-border/50 bg-muted/30 py-3 mt-2">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <span className="text-sm text-muted-foreground font-medium">
+                  Waiting for other players{timeLeft > 0 ? ` · ${timeLeft}s remaining` : "..."}
+                </span>
               </div>
             )}
           </CardContent>
